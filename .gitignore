@@ -1,0 +1,18 @@
+# 构建产物与工具链
+build/
+.sdk/
+
+# 日志
+*.log
+logs/*.log
+
+# west 工作区元数据，由 west init -l . 重建，不入库
+.west/
+
+# 上游源码由 west 管理，不纳入本仓库版本控制
+zephyr/
+
+# west 拉取的第三方模块一律不入库
+modules/*
+# 例外：本工程自有的 out-of-tree 板级驱动模块，必须入库
+!modules/apollo_f429/

@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+description: |
+  DHT11 / DS18B20 single-wire sensor on a GPIO (ATK 阿波罗 U10 接口，PB12)。
+
+compatible: "alientek,dht11"
+
+include: sensor-device.yaml
+
+properties:
+  gpios:
+    type: phandle-array
+    required: true
+    description: Single-wire data pin, open-drain style with external pull-up.

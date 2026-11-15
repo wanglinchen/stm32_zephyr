@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+description: |
+  NEC infrared remote receiver (LF0038 style, active-low output).
+
+compatible: "alientek,ir-nec"
+
+include: base.yaml
+
+properties:
+  gpios:
+    type: phandle-array
+    required: true
+    description: Receiver output pin, active low.

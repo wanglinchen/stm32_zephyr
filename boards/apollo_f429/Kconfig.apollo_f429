@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# ALIENTEK Apollo V2 board Kconfig fragment (selects the SoC)
+
+config BOARD_APOLLO_F429
+	select SOC_STM32F429XX

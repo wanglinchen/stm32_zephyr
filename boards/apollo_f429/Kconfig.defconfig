@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# ALIENTEK Apollo V2 board defaults that depend on other symbols
+
+if BOARD_APOLLO_F429
+
+# 板上有 FMC（SDRAM / NAND / 8080 屏）
+config MEMC
+	default y
+
+endif # BOARD_APOLLO_F429

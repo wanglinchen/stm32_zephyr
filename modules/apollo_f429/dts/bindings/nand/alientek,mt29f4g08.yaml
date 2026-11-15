@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+description: |
+  Micron MT29F4G08 (4Gbit, 8-bit) NAND flash connected to the STM32 FMC
+  NAND bank 2 (NCE2 on PG9 / 0x70000000).  The driver programs FMC bank 2
+  itself because Zephyr has no FMC NAND controller driver.
+
+compatible: "alientek,mt29f4g08"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+
+  block-size:
+    type: int
+    default: 131072
+    description: Erase block size in bytes (64 pages * 2048 B).
+
+  page-size:
+    type: int
+    default: 2048
+    description: Page (main area) size in bytes.

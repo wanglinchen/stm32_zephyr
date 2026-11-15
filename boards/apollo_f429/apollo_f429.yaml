@@ -1,0 +1,22 @@
+identifier: apollo_f429
+name: ALIENTEK Apollo V2 (STM32F429IGT6)
+type: mcu
+arch: arm
+ram: 192
+flash: 1024
+toolchain:
+  - zephyr
+  - gnuarmemb
+supported:
+  - adc
+  - can
+  - dac
+  - display
+  - dma
+  - gpio
+  - i2c
+  - pwm
+  - spi
+  - uart
+  - usb_device
+  - watchdog

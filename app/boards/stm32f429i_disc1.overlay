@@ -1,0 +1,15 @@
+/*
+ * 板级硬件差异层：只描述“这块板子”的事实，不动应用逻辑。
+ * Zephyr 构建时自动加载 app/boards/<board>.overlay。
+ */
+/ {
+	aliases {
+		/* 运行指示改用 LD4（PG14），LD3 留给业务状态 */
+		app-heartbeat-led = &red_led_4;
+	};
+};
+
+/* 控制台固定 USART1：PA9(TX) / PA10(RX)，115200 8N1 */
+&usart1 {
+	current-speed = <115200>;
+};

@@ -1,0 +1,473 @@
+/*
+ * ALIENTEK Apollo V2 (阿波罗 V2) - STM32F429IGT6
+ *
+ * 引脚来源：docs/hardware/pinmap/阿波罗V2 STM32F429开发板IO引脚分配表.xlsx
+ *            docs/hardware/sch/DNF429P_F767P_H743P V2.6.pdf（底板）
+ *            docs/hardware/sch/STM32F429_CORE_V2.pdf（核心板）
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+
+#include <st/f4/stm32f429Xi.dtsi>
+#include <st/f4/stm32f429i(e-g)tx-pinctrl.dtsi>
+#include <zephyr/dt-bindings/display/panel.h>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+
+/ {
+	model = "ALIENTEK Apollo V2 (STM32F429IGT6)";
+	compatible = "alientek,apollo-f429";
+
+	chosen {
+		zephyr,console = &usart1;
+		zephyr,shell-uart = &usart1;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,dtcm = &ccm0;
+		zephyr,display = &ltdc;
+		zephyr,touch = &xpt2046;
+	};
+
+	/* W9825G6KH：32MB，挂在 FMC SDRAM bank1（0xC0000000） */
+	sdram1: sdram@c0000000 {
+		compatible = "zephyr,memory-region", "mmio-sram";
+		device_type = "memory";
+		reg = <0xc0000000 DT_SIZE_M(32)>;
+		zephyr,memory-region = "SDRAM1";
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		green_led: led_0 {
+			gpios = <&gpiob 0 GPIO_ACTIVE_HIGH>;
+			label = "DS0 Green";
+		};
+
+		red_led: led_1 {
+			gpios = <&gpiob 1 GPIO_ACTIVE_HIGH>;
+			label = "DS1 Red";
+		};
+	};
+
+	keys {
+		compatible = "gpio-keys";
+
+		key0: key_0 {
+			label = "KEY0";
+			gpios = <&gpioh 3 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			zephyr,code = <INPUT_KEY_0>;
+		};
+
+		key1: key_1 {
+			label = "KEY1";
+			gpios = <&gpioh 2 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			zephyr,code = <INPUT_KEY_1>;
+		};
+
+		key2: key_2 {
+			label = "KEY2";
+			gpios = <&gpioc 13 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			zephyr,code = <INPUT_KEY_2>;
+		};
+
+		wkup: key_wkup {
+			label = "WK_UP";
+			gpios = <&gpioa 0 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+			zephyr,code = <INPUT_KEY_WAKEUP>;
+		};
+	};
+
+	aliases {
+		led0 = &green_led;
+		led1 = &red_led;
+		sw0 = &key0;
+		sw1 = &key1;
+		sw2 = &key2;
+		sw3 = &wkup;
+	};
+
+	/*
+	 * 触摸：XPT2046（ATK-MD0430 / ATK-MD0700 模块原理图确认）
+	 * T_SCK=PH6, T_MISO=PG3, T_MOSI=PI3, T_CS=PI8, T_PEN=PH7
+	 * 这三个信号在 F429 上没有同一个硬件 SPI 复用，使用上游 spi-bitbang。
+	 */
+	touch_bus: spi-bitbang {
+		compatible = "zephyr,spi-bitbang";
+		status = "okay";
+		clk-gpios = <&gpioh 6 GPIO_ACTIVE_HIGH>;
+		sdi-gpios = <&gpiog 3 GPIO_ACTIVE_HIGH>;
+		sdo-gpios = <&gpioi 3 GPIO_ACTIVE_HIGH>;
+		cs-gpios = <&gpioi 8 GPIO_ACTIVE_HIGH>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		xpt2046: xpt2046@0 {
+			compatible = "xptek,xpt2046";
+			reg = <0>;
+			spi-max-frequency = <1000000>;
+			int-gpios = <&gpioh 7 GPIO_ACTIVE_LOW>;
+			touchscreen-size-x = <800>;
+			touchscreen-size-y = <480>;
+			min-x = <0>;
+			min-y = <0>;
+			max-x = <4095>;
+			max-y = <4095>;
+			z-threshold = <100>;
+			reads = <4>;
+		};
+	};
+
+	/*
+	 * 8080 并口 TFTLCD：FMC bank1（NE1=PD7），RS=A18（PD13），D0..D15。
+	 * 默认关闭：与本板 RGBLCD（LTDC）二选一；插 8080 模块时把 status 改 okay，
+	 * 并把 chosen 的 zephyr,display 指向 &lcd8080。
+	 */
+	lcd8080: display@60000000 {
+		compatible = "st,stm32-fmc-mipi-dbi";
+		reg = <0x60000000 0x200000>;
+		register-select-pin = <18>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+
+		ili9341_8080: ili9341@0 {
+			compatible = "ilitek,ili9341";
+			reg = <0>;
+			width = <240>;
+			height = <320>;
+			rotation = <0>;
+			pixel-format = <PANEL_PIXEL_FORMAT_RGB_565>;
+			/* 默认使用 LTDC 的 RGB 屏；8080 并口屏需手工改 status 并补 mipi 属性 */
+			status = "disabled";
+		};
+	};
+};
+
+/* 1MB Flash（F429IGT6），非 2MB 的 XG 版本 */
+&flash0 {
+	reg = <0x08000000 DT_SIZE_K(1024)>;
+	ranges = <0 0x08000000 DT_SIZE_K(1024)>;
+};
+
+/* 外部 25MHz 晶振（核心板 PH0/PH1） */
+&clk_hse {
+	clock-frequency = <DT_FREQ_M(25)>;
+	status = "okay";
+};
+
+&clk_lsi {
+	status = "okay";
+};
+
+/* HSE 25MHz -> PLL VCO 336MHz -> SYSCLK 168MHz / USB 48MHz */
+&pll {
+	div-m = <25>;
+	mul-n = <336>;
+	div-p = <2>;
+	div-q = <7>;
+	clocks = <&clk_hse>;
+	status = "okay";
+};
+
+/* LTDC 像素时钟：25MHz * 384 = 384MHz VCO，R = /6，post = /2 -> 32MHz */
+&pllsai {
+	div-m = <25>;
+	mul-n = <384>;
+	div-r = <6>;
+	post-div-r = <2>;
+	clocks = <&clk_hse>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(168)>;
+	ahb-prescaler = <1>;
+	apb1-prescaler = <4>;
+	apb2-prescaler = <2>;
+};
+
+/* USART1 -> CH340 USB 串口（P11 跳线） */
+&usart1 {
+	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+	status = "okay";
+};
+
+/* USART2 -> RS232 COM2 / RS485（P7、P8 跳线，与 YT8512C MDIO 共用 PA2） */
+&usart2 {
+	pinctrl-0 = <&usart2_tx_pa2 &usart2_rx_pa3>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+	status = "okay";
+};
+
+/* USART3 -> RS232 COM3 / ATK-MODULE 接口 */
+&usart3 {
+	pinctrl-0 = <&usart3_tx_pb10 &usart3_rx_pb11>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+	status = "okay";
+};
+
+&rtc {
+	clocks = <&rcc STM32_CLOCK(APB1, 28)>,
+		 <&rcc STM32_SRC_LSE RTC_SEL(1)>;
+	status = "okay";
+};
+
+/*
+ * IIC 总线 = I2C2（PH4=SCL / PH5=SDA），4.7K 上拉。
+ * 挂载：24C02、PCF8574T、ES8388、QMI8658A、SPA06-003、AP3216C。
+ */
+&i2c2 {
+	pinctrl-0 = <&i2c2_scl_ph4 &i2c2_sda_ph5>;
+	pinctrl-names = "default";
+	clock-frequency = <I2C_BITRATE_FAST>;
+	status = "okay";
+
+	eeprom0: eeprom@50 {
+		compatible = "atmel,24c02";
+		reg = <0x50>;
+		size = <256>;
+		status = "okay";
+	};
+
+	/* PCF8574T（A0/A1/A2 = GND，地址 0x20） */
+	pcf8574: pcf8574@20 {
+		compatible = "nxp,pcf857x";
+		reg = <0x20>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		ngpios = <8>;
+		status = "okay";
+	};
+
+	/* 六轴 QMI8658A（CS 上拉，SA0=1 -> 0x6B） */
+	imu: qmi8658a@6b {
+		compatible = "qst,qmi8658a";
+		reg = <0x6b>;
+		status = "okay";
+	};
+
+	/* 环境光/接近 AP3216C */
+	light: ap3216c@1e {
+		compatible = "alientek,ap3216c";
+		reg = <0x1e>;
+		status = "okay";
+	};
+
+	/* 音频编解码 ES8388（AD0=0 -> 0x10） */
+	codec: es8388@10 {
+		compatible = "everest,es8388";
+		reg = <0x10>;
+		status = "okay";
+	};
+};
+
+/* PCF8574 扩展 IO 的用途（原理图 IO_EXPANDER 页） */
+/ {
+	beeper {
+		compatible = "gpio-leds";
+		buzzer: beep {
+			gpios = <&pcf8574 0 GPIO_ACTIVE_HIGH>;
+			label = "BEEP (PCF8574 P0)";
+		};
+	};
+};
+
+/*
+ * SPI5：W25Q256（PF6=CS, PF7=SCK, PF8=MISO, PF9=MOSI）
+ * 注意 W25Q256 为 32MB，超过 16MB 需要 4 字节地址模式。
+ */
+&spi5 {
+	pinctrl-0 = <&spi5_sck_pf7 &spi5_miso_pf8 &spi5_mosi_pf9>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpiof 6 GPIO_ACTIVE_LOW>;
+	status = "okay";
+
+	w25q256: flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <8000000>;
+		size = <DT_SIZE_M(32)>;
+		status = "okay";
+	};
+};
+
+/*
+ * FMC：SDRAM + 8080 屏 + NAND 共用数据/地址总线。
+ * 片选独立：SDRAM SDNE0(PC2)，LCD NE1(PD7)，NAND NCE2(PG9)。
+ */
+&fmc {
+	status = "okay";
+	pinctrl-0 = <
+		&fmc_sdclk_pg8 &fmc_sdnwe_pc0 &fmc_sdne0_pc2 &fmc_sdcke0_pc3
+		&fmc_sdnras_pf11 &fmc_sdncas_pg15
+		&fmc_nbl0_pe0 &fmc_nbl1_pe1
+		&fmc_a0_pf0 &fmc_a1_pf1 &fmc_a2_pf2 &fmc_a3_pf3
+		&fmc_a4_pf4 &fmc_a5_pf5 &fmc_a6_pf12 &fmc_a7_pf13
+		&fmc_a8_pf14 &fmc_a9_pf15 &fmc_a10_pg0 &fmc_a11_pg1
+		&fmc_a12_pg2 &fmc_a14_pg4 &fmc_a15_pg5
+		&fmc_d0_pd14 &fmc_d1_pd15 &fmc_d2_pd0 &fmc_d3_pd1
+		&fmc_d4_pe7 &fmc_d5_pe8 &fmc_d6_pe9 &fmc_d7_pe10
+		&fmc_d8_pe11 &fmc_d9_pe12 &fmc_d10_pe13 &fmc_d11_pe14
+		&fmc_d12_pe15 &fmc_d13_pd8 &fmc_d14_pd9 &fmc_d15_pd10
+		&fmc_noe_pd4 &fmc_nwe_pd5 &fmc_nwait_pd6
+		&fmc_ne1_pd7 &fmc_a18_pd13
+		&fmc_a16_pd11 &fmc_a17_pd12
+		&nand_cs_pg9>;
+	pinctrl-names = "default";
+
+	sdram {
+		status = "okay";
+		power-up-delay = <100>;
+		num-auto-refresh = <8>;
+		/* CAS latency 3, burst read/write, sequential */
+		mode-register = <0x230>;
+		/* 64ms / 8192 rows @ 84MHz SDCLK - 20 */
+		refresh-rate = <636>;
+
+		bank@0 {
+			reg = <0>;
+			/* NC=9, NR=13, 16bit, 4 banks, CAS3, SDCLK=HCLK/2 */
+			st,sdram-control = <STM32_FMC_SDRAM_NC_9
+					    STM32_FMC_SDRAM_NR_13
+					    STM32_FMC_SDRAM_MWID_16
+					    STM32_FMC_SDRAM_NB_4
+					    STM32_FMC_SDRAM_CAS_3
+					    STM32_FMC_SDRAM_SDCLK_PERIOD_2
+					    STM32_FMC_SDRAM_RBURST_ENABLE
+					    STM32_FMC_SDRAM_RPIPE_0>;
+			/* TMRD TXSR TRAS TRC TWP TRP TRCD */
+			st,sdram-timing = <2 6 4 6 2 2 2>;
+		};
+	};
+};
+
+/*
+ * NAND MT29F4G08（4Gbit，8 位，FMC NAND bank2 = 0x70000000，NCE2=PG9）
+ * 上游没有 FMC NAND 驱动，由本项目 modules/apollo_f429/drivers/mt29f4g08 接管。
+ */
+/ {
+	nand: nand@70000000 {
+		compatible = "alientek,mt29f4g08";
+		reg = <0x70000000 0x20000000>;
+		status = "okay";
+	};
+};
+
+/*
+ * RGBLCD（LTDC 直驱）：R3-R7 / G2-G7 / B3-B7 = RGB565
+ * 背光 PB5（高有效）
+ */
+&ltdc {
+	pinctrl-0 = <
+		&ltdc_r3_ph9 &ltdc_r4_ph10 &ltdc_r5_ph11 &ltdc_r6_ph12 &ltdc_r7_pg6
+		&ltdc_g2_ph13 &ltdc_g3_ph14 &ltdc_g4_ph15 &ltdc_g5_pi0
+		&ltdc_g6_pi1 &ltdc_g7_pi2
+		&ltdc_b3_pg11 &ltdc_b4_pi4 &ltdc_b5_pi5 &ltdc_b6_pi6 &ltdc_b7_pi7
+		&ltdc_de_pf10 &ltdc_clk_pg7 &ltdc_hsync_pi10 &ltdc_vsync_pi9>;
+	pinctrl-names = "default";
+	ext-sdram = <&sdram1>;
+	bl-ctrl-gpios = <&gpiob 5 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+
+	width = <800>;
+	height = <480>;
+	/* Zephyr 4.5 的 LTDC 驱动只接受 RGB888（面板格式枚举值 1） */
+	pixel-format = <1>;
+	def-back-color-red = <0>;
+	def-back-color-green = <0>;
+	def-back-color-blue = <0>;
+
+	/* 800x480@60 典型时序，按实际屏模块微调 */
+	display-timings {
+		compatible = "zephyr,panel-timing";
+		de-active = <1>;
+		pixelclk-active = <0>;
+		hsync-active = <0>;
+		vsync-active = <0>;
+		hsync-len = <48>;
+		vsync-len = <3>;
+		hback-porch = <88>;
+		vback-porch = <32>;
+		hfront-porch = <40>;
+		vfront-porch = <13>;
+	};
+};
+
+/* ADC1_IN5 = PA5，板上做 TPAD / 光敏检测 */
+/* F429 的 ADC1/2/3 共用一个 adc123_common 父节点（公共时钟/采样参数），
+ * 上游 dtsi 默认把它关掉，必须与子节点一起打开，否则 ADC_STM32 驱动不会被选中。
+ */
+&adc123_common {
+	status = "okay";
+	/* APB2 = 84 MHz，4 分频 → 21 MHz，满足 F4 ADC 最大 36 MHz 限制 */
+	st,adc-prescaler = <4>;
+};
+
+&adc1 {
+	pinctrl-0 = <&adc1_in5_pa5>;
+	pinctrl-names = "default";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	channel@5 {
+		reg = <5>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,input-positive = <5>;
+		zephyr,resolution = <12>;
+	};
+};
+
+/* DAC1_OUT1 = PA4（STM_DAC / ATK-MODULE LED 复用） */
+&dac1 {
+	pinctrl-0 = <&dac_out1_pa4>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+/* CAN1：PA11=RX / PA12=TX（与 USB 通过 P9 跳线二选一） */
+&can1 {
+	pinctrl-0 = <&can1_rx_pa11 &can1_tx_pa12>;
+	pinctrl-names = "default";
+	status = "disabled";
+};
+
+/* USB OTG FS 设备口（TYPE-C / MiniUSB，P9 选择 USB） */
+zephyr_udc0: &usbotg_fs {
+	pinctrl-0 = <&usb_otg_fs_dm_pa11 &usb_otg_fs_dp_pa12>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+/* 1-Wire / DHT11-DS18B20 单总线（PB12） */
+/ {
+	w1_bus: w1-gpio {
+		compatible = "alientek,dht11";
+		gpios = <&gpiob 12 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;
+		status = "okay";
+	};
+
+	/* LF0038 红外接收头（PA8，低有效） */
+	ir: ir-nec {
+		compatible = "alientek,ir-nec";
+		gpios = <&gpioa 8 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
+};
+
+&pinctrl {
+	/* NAND 片选 NCE2 = PG9（AF12），生成脚本只给了 fmc_ne2_pg9 标签 */
+	nand_cs_pg9: nand_cs_pg9 {
+		pinmux = <STM32_PINMUX('G', 9, AF12)>;
+		slew-rate = "very-high-speed";
+	};
+};
