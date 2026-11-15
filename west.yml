@@ -1,0 +1,31 @@
+# West manifest for this project (stm32-zephyr)
+#
+# 本工程不是 Zephyr 上游的一部分，因此用它自己的 manifest 声明依赖。
+#
+# 已在本地存在的 workspace 直接可用（.west/config 指向本文件）。
+# 全新环境复现：
+#   pip install west
+#   west init -l .
+#   west update
+#
+# 只拉取编译所需的三个 HAL 模块（与 scripts/build.ps1 的最小模块集一致）。
+# MCUboot 不在 allowlist 内 —— 本工程是单镜像直启，不需要 bootloader。
+
+manifest:
+  remotes:
+    - name: upstream
+      url-base: https://github.com/zephyrproject-rtos
+
+  defaults:
+    remote: upstream
+
+  projects:
+    - name: zephyr
+      # v4.5.0 快照（VERSION: 4.5.0），与本工作区 zephyr/ 的 HEAD 一致
+      revision: d89cc4ad54232587ba5ed3d7c15abb9e97a0f5b0
+      path: zephyr
+      import:
+        name-allowlist:
+          - cmsis
+          - cmsis_6
+          - hal_stm32

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>阿波罗 V2 · Zephyr 驱动覆盖看板</title>
+<style>
+  :root{
+    --bg:#0a0c0f;
+    --panel:#12161a;
+    --line:#222a31;
+    --ink:#e8edf2;
+    --dim:#93a1ad;
+    --ok:#3fd08a;
+    --own:#4aa8ff;
+    --warn:#e8b04b;
+    --off:#6f7c88;
+    --mono:"Cascadia Mono","JetBrains Mono",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:"Segoe UI",system-ui,-apple-system,"Microsoft YaHei",sans-serif;
+       line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:36px 20px 64px}
+  header{border-bottom:1px solid var(--line);padding-bottom:22px}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+  h1{font-size:clamp(24px,4vw,40px);margin:8px 0 6px;letter-spacing:-.02em;font-weight:650}
+  .sub{color:var(--dim);font-size:14px;max-width:70ch}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:26px 0 30px}
+  .stat{background:var(--panel);border:1px solid var(--line);padding:14px 16px}
+  .stat b{display:block;font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-.03em}
+  .stat span{font-size:12px;color:var(--dim)}
+  .stat.ok b{color:var(--ok)} .stat.own b{color:var(--own)}
+  .stat.warn b{color:var(--warn)} .stat.off b{color:var(--off)}
+  h2{font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);
+     font-family:var(--mono);margin:34px 0 12px;font-weight:500}
+  .board{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);padding:14px 16px 6px}
+  .card h3{margin:0 0 10px;font-size:14px;font-weight:600;display:flex;justify-content:space-between;align-items:baseline}
+  .card h3 small{font-family:var(--mono);font-weight:400;font-size:11px;color:var(--dim)}
+  .row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+       padding:6px 0;border-top:1px dashed #1b2229;font-size:13px}
+  .row:first-of-type{border-top:0}
+  .row .drv{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:7px;vertical-align:1px}
+  .g .dot{background:var(--ok)} .b .dot{background:var(--own)}
+  .a .dot{background:var(--warn)} .x .dot{background:var(--off)}
+  .g{color:var(--ink)} .b{color:var(--ink)} .a{color:#f0dfc0} .x{color:var(--dim)}
+  .legend{display:flex;flex-wrap:wrap;gap:18px;margin-top:16px;font-size:12px;color:var(--dim)}
+  .legend i{font-style:normal}
+  .legend .dot{vertical-align:0}
+  .gaps{background:var(--panel);border:1px solid var(--line);padding:18px 20px;margin-top:12px}
+  .gap{display:grid;grid-template-columns:120px 1fr;gap:14px;padding:9px 0;border-top:1px dashed #1b2229;font-size:13px}
+  .gap:first-child{border-top:0}
+  .tag{font-family:var(--mono);font-size:11px;color:var(--warn);letter-spacing:.04em}
+  .tag.p2{color:var(--dim)}
+  .bar{display:flex;height:10px;background:#1a2026;border:1px solid var(--line);margin-top:10px}
+  .bar i{display:block;height:100%}
+  .bar .s1{width:46%;background:var(--ok)} .bar .s2{width:17%;background:var(--own)}
+  .bar .s3{width:19%;background:var(--warn)} .bar .s4{width:18%;background:var(--off)}
+  footer{margin-top:36px;border-top:1px solid var(--line);padding-top:14px;
+         font-family:var(--mono);font-size:11px;color:var(--dim);display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  @media (max-width:900px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .board{grid-template-columns:1fr 1fr}
+  }
+  @media (max-width:620px){
+    .board{grid-template-columns:1fr}
+    .gap{grid-template-columns:1fr;gap:2px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kicker">alientek · apollo_f429 · stm32f429igt6 · zephyr 4.5</div>
+    <h1>板载模块驱动覆盖看板</h1>
+    <p class="sub">按 <code>docs/hardware</code> 的原理图与 IO 引脚分配表逐模块落地。绿色＝上游驱动已实例化，蓝色＝本项目自写驱动，黄色＝只能裸总线访问或设备对象缺失，灰色＝未启用 / 上游缺节点。</p>
+  </header>
+
+  <div class="stats">
+    <div class="stat ok"><b>14</b><span>上游驱动可用</span></div>
+    <div class="stat own"><b>5</b><span>自写驱动</span></div>
+    <div class="stat warn"><b>6</b><span>裸总线 / 待排查</span></div>
+    <div class="stat off"><b>7</b><span>未启用 / 暂缓</span></div>
+  </div>
+
+  <div class="bar" aria-hidden="true"><i class="s1"></i><i class="s2"></i><i class="s3"></i><i class="s4"></i></div>
+  <div class="legend">
+    <i class="g"><span class="dot"></span>已实例化</i>
+    <i class="b"><span class="dot"></span>自写驱动</i>
+    <i class="a"><span class="dot"></span>裸总线 / 缺失</i>
+    <i class="x"><span class="dot"></span>未启用</i>
+  </div>
+
+  <h2>存储与 IO</h2>
+  <div class="board">
+    <div class="card">
+      <h3>存储 <small>FMC / SPI5 / I2C2</small></h3>
+      <div class="row g"><span><span class="dot"></span>SDRAM · W9825G6KH 32 MB</span><span class="drv">memc_stm32_sdram</span></div>
+      <div class="row b"><span><span class="dot"></span>NAND · MT29F4G08 512 MB</span><span class="drv">alientek,mt29f4g08</span></div>
+      <div class="row g"><span><span class="dot"></span>SPI NOR · W25Q256 32 MB</span><span class="drv">spi_nor</span></div>
+      <div class="row a"><span><span class="dot"></span>EEPROM · 24C02</span><span class="drv">i2c 裸读写</span></div>
+      <div class="row a"><span><span class="dot"></span>内部 Flash 设备对象</span><span class="drv">待排查</span></div>
+    </div>
+    <div class="card">
+      <h3>IO 扩展与指示 <small>PCF8574 @0x20</small></h3>
+      <div class="row g"><span><span class="dot"></span>PCF8574T 8 位扩展</span><span class="drv">gpio_pcf857x</span></div>
+      <div class="row g"><span><span class="dot"></span>蜂鸣器 · P0</span><span class="drv">gpio_dt_spec</span></div>
+      <div class="row g"><span><span class="dot"></span>LED0 / LED1 · PB0 / PB1</span><span class="drv">gpio</span></div>
+      <div class="row g"><span><span class="dot"></span>KEY0-2 / WK_UP</span><span class="drv">input_gpio_keys</span></div>
+    </div>
+    <div class="card">
+      <h3>模拟与时钟 <small>PA5 / PA4 / LSE</small></h3>
+      <div class="row g"><span><span class="dot"></span>ADC1_IN5 · PA5</span><span class="drv">adc_stm32</span></div>
+      <div class="row g"><span><span class="dot"></span>DAC1_OUT1 · PA4</span><span class="drv">dac_stm32</span></div>
+      <div class="row g"><span><span class="dot"></span>RTC · 32.768 kHz LSE</span><span class="drv">rtc_stm32</span></div>
+      <div class="row g"><span><span class="dot"></span>UART1/2/3 · 115200</span><span class="drv">uart_stm32</span></div>
+    </div>
+  </div>
+
+  <h2>传感器与音频</h2>
+  <div class="board">
+    <div class="card">
+      <h3>I2C2 传感器簇 <small>PH4 SCL / PH5 SDA</small></h3>
+      <div class="row g"><span><span class="dot"></span>QMI8658A 六轴 @0x6B</span><span class="drv">qst,qmi8658a</span></div>
+      <div class="row b"><span><span class="dot"></span>AP3216C 光感/接近 @0x1E</span><span class="drv">alientek,ap3216c</span></div>
+      <div class="row a"><span><span class="dot"></span>SPA06-003 气压 @0x76</span><span class="drv">缺手册</span></div>
+      <div class="row b"><span><span class="dot"></span>ES8388 编解码 @0x10</span><span class="drv">everest,es8388</span></div>
+    </div>
+    <div class="card">
+      <h3>单总线 / 红外 <small>PB12 / PA8</small></h3>
+      <div class="row b"><span><span class="dot"></span>DHT11 温湿度 · PB12</span><span class="drv">alientek,dht11</span></div>
+      <div class="row b"><span><span class="dot"></span>NEC 红外接收 · PA8</span><span class="drv">alientek,ir-nec</span></div>
+      <div class="row a"><span><span class="dot"></span>DS18B20（与 DHT11 同座）</span><span class="drv">缺 1-Wire</span></div>
+    </div>
+    <div class="card">
+      <h3>音频通路 <small>SAI1 + ES8388</small></h3>
+      <div class="row x"><span><span class="dot"></span>SAI1 数据通路</span><span class="drv">未启用 + 需 DMA</span></div>
+      <div class="row b"><span><span class="dot"></span>ES8388 寄存器层</span><span class="drv">音量 / 静音 / 配置</span></div>
+    </div>
+  </div>
+
+  <h2>显示、网络与外设</h2>
+  <div class="board">
+    <div class="card">
+      <h3>显示与触摸 <small>LTDC / SPI-bitbang</small></h3>
+      <div class="row g"><span><span class="dot"></span>RGB LCD 800×480 · LTDC</span><span class="drv">display_stm32_ltdc</span></div>
+      <div class="row g"><span><span class="dot"></span>XPT2046 触摸</span><span class="drv">input_xpt2046</span></div>
+      <div class="row x"><span><span class="dot"></span>8080 并口屏 · FMC NE1</span><span class="drv">默认 disabled</span></div>
+    </div>
+    <div class="card">
+      <h3>网络与存储卡 <small>RMII / SDIO</small></h3>
+      <div class="row x"><span><span class="dot"></span>YT8512C 以太网 RMII</span><span class="drv">mac 未启用</span></div>
+      <div class="row x"><span><span class="dot"></span>TF 卡 · SDIO</span><span class="drv">F4 dtsi 无节点</span></div>
+      <div class="row x"><span><span class="dot"></span>OV5640 · DCMI + SCCB</span><span class="drv">dcmi 节点缺失</span></div>
+    </div>
+    <div class="card">
+      <h3>接口 <small>USB / CAN / RS485 / nRF</small></h3>
+      <div class="row g"><span><span class="dot"></span>USB OTG FS · UDC</span><span class="drv">zephyr,udc</span></div>
+      <div class="row x"><span><span class="dot"></span>CAN1（与 USB 跳线二选一）</span><span class="drv">disabled</span></div>
+      <div class="row a"><span><span class="dot"></span>RS485 方向位 · PCF8574 P6</span><span class="drv">未封装</span></div>
+      <div class="row x"><span><span class="dot"></span>NRF24L01 · SPI2</span><span class="drv">无驱动</span></div>
+    </div>
+  </div>
+
+  <h2>缺口与下一步</h2>
+  <div class="gaps">
+    <div class="gap"><span class="tag">P0 上板验证</span><span>全部结论来自编译/链接与手册；先用串口 <code>devices</code> 看设备就绪，再逐项读写 ID（NAND、W25Q256、QMI8658A、AP3216C、XPT2046）。</span></div>
+    <div class="gap"><span class="tag">P0 flash0 / sdram1</span><span>节点都 okay，但 <code>DEVICE_DT_GET</code> 链接期缺设备对象，影响内部 flash 上的 NVS 与 SDRAM 自检。</span></div>
+    <div class="gap"><span class="tag p2">P1 音频</span><span>ES8388 寄存器层就绪，缺 SAI1 时钟与 DMA；<code>sai1</code> 节点需启用。</span></div>
+    <div class="gap"><span class="tag p2">P1 以太网</span><span>确定 PHY 地址、把 PCF8574 P7 作复位、评估 <code>CONFIG_NET</code> 的 RAM 占用。</span></div>
+    <div class="gap"><span class="tag p2">P1 存储卡 / 相机</span><span>F4 dtsi 缺 <code>sdmmc</code>、<code>dcmi</code> 节点，需自建；SCCB 还缺 <code>i2c-bitbang</code> 绑定。</span></div>
+    <div class="gap"><span class="tag p2">P2 其余</span><span>SPA06-003（缺手册）、DS18B20、NRF24L01、RS485 方向封装、8080 屏参数校准、CAN1 引脚复用。</span></div>
+  </div>
+
+  <footer>
+    <span>构建：zephyr.elf · FLASH 120,852 B / 1 MB（11.53%）· RAM 31,424 B / 192 KB（15.98%）· SDRAM1 750 KB</span>
+    <span>依据 docs/hardware · 未上板实测项已在对照表标注</span>
+  </footer>
+</div>
+</body>
+</html>

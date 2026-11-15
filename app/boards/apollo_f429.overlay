@@ -1,0 +1,5 @@
+/ {
+	aliases {
+		app-heartbeat-led = &green_led;
+	};
+};

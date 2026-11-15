@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STM32F429 · Zephyr 4.5 架构图</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230A0E13'/%3E%3Crect x='6' y='8' width='20' height='4' fill='%235C9FE0'/%3E%3Crect x='6' y='15' width='20' height='4' fill='%2363C8A2'/%3E%3Crect x='6' y='22' width='20' height='4' fill='%23D8836F'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0A0E13; --panel:#111821; --panel2:#0D131B; --line:#1E2A36;
+    --text:#E4EBF2; --dim:#8A9AA9; --faint:#5E6E7C;
+    --app:#E3B062; --svc:#63C8A2; --kern:#5C9FE0; --drv:#79C7D4; --soc:#D8836F; --hw:#8C9BA7;
+    --mono:"Cascadia Mono","Consolas","Source Code Pro",ui-monospace,monospace;
+    --sans:"PingFang SC","Microsoft YaHei","Noto Sans SC","Segoe UI Variable","Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  body{padding:48px 20px 80px}
+  .wrap{max-width:1060px;margin:0 auto}
+
+  header{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:40px}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--faint);text-transform:none}
+  h1{font-size:clamp(30px,5vw,52px);line-height:1.1;margin:14px 0 16px;font-weight:600;letter-spacing:-.01em}
+  h1 span{color:var(--kern)}
+  .lede{color:var(--dim);font-size:16px;line-height:1.75;max-width:62ch;margin:0}
+  .facts{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+  .fact{font-family:var(--mono);font-size:12px;color:var(--dim);border:1px solid var(--line);padding:6px 10px;background:var(--panel2)}
+  .fact b{color:var(--text);font-weight:500}
+
+  section{margin-top:56px}
+  .shead{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:26px}
+  .snum{font-family:var(--mono);font-size:12px;color:var(--faint)}
+  h2{font-size:20px;margin:0;font-weight:600;letter-spacing:.01em}
+  .note{color:var(--dim);font-size:14px;line-height:1.7;margin:0 0 22px;max-width:70ch}
+
+  /* 分层栈 */
+  .stack{border:1px solid var(--line);background:var(--panel2)}
+  .layer{display:grid;grid-template-columns:132px 1fr;border-top:1px solid var(--line);background:var(--panel)}
+  .layer:first-child{border-top:none}
+  .ltag{display:flex;align-items:center;gap:10px;padding:16px 14px;font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--dim);border-right:1px solid var(--line)}
+  .dot{width:3px;height:26px;background:var(--drv);flex:0 0 auto}
+  .lbody{padding:15px 18px;min-width:0}
+  .ltitle{font-size:15px;font-weight:600;margin-bottom:5px;overflow-wrap:anywhere}
+  .lpath{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-bottom:7px;overflow-wrap:anywhere}
+  .ldesc{font-size:13px;color:var(--dim);line-height:1.65}
+  .tagapp .dot{background:var(--app)} .tagapp .ltitle{color:var(--app)}
+  .tagsvc .dot{background:var(--svc)} .tagsvc .ltitle{color:var(--svc)}
+  .tagkern .dot{background:var(--kern)} .tagkern .ltitle{color:var(--kern)}
+  .tagdrv .dot{background:var(--drv)} .tagdrv .ltitle{color:var(--drv)}
+  .tagsoc .dot{background:var(--soc)} .tagsoc .ltitle{color:var(--soc)}
+  .taghw .dot{background:var(--hw)} .taghw .ltitle{color:var(--hw)}
+
+  /* 内存映射 */
+  .mem{display:grid;gap:10px}
+  .mrow{display:grid;grid-template-columns:104px 1fr 76px;gap:14px;align-items:center;
+        border:1px solid var(--line);background:var(--panel);padding:12px 14px}
+  .addr{font-family:var(--mono);font-size:12px;color:var(--faint)}
+  .mname{font-size:14.5px;font-weight:600}
+  .muse{font-size:12.5px;color:var(--dim);margin-top:3px;line-height:1.5}
+  .msize{font-family:var(--mono);font-size:13px;text-align:right;color:var(--text)}
+  .mbar{height:6px;margin-top:8px;background:var(--line)}
+  .mbar i{display:block;height:100%}
+  .f i{background:var(--app)} .s i{background:var(--kern)} .c i{background:var(--drv)} .d i{background:var(--svc)}
+  .callout{margin-top:16px;border-left:2px solid var(--soc);padding:10px 0 10px 14px;color:var(--dim);font-size:13.5px;line-height:1.7}
+  .callout b{color:var(--soc);font-weight:600}
+
+  /* 启动流程 */
+  .boot{position:relative;padding-left:26px}
+  .boot:before{content:"";position:absolute;left:4px;top:6px;bottom:6px;width:1px;background:var(--line)}
+  .step{position:relative;padding:0 0 24px 0}
+  .step:last-child{padding-bottom:0}
+  .step:before{content:"";position:absolute;left:-26px;top:4px;width:9px;height:9px;border-radius:50%;background:var(--kern);box-shadow:0 0 0 3px var(--bg)}
+  .step.alt:before{background:var(--svc)}
+  .stitle{font-family:var(--mono);font-size:13.5px;color:var(--text)}
+  .stitle em{font-style:normal;color:var(--faint);font-size:11.5px;margin-left:8px}
+  .sdesc{font-size:13px;color:var(--dim);line-height:1.7;margin-top:5px;max-width:66ch}
+
+  /* 构建流水线 */
+  .pipe{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--line);background:var(--panel2)}
+  .pstep{flex:1 1 150px;min-width:0;padding:16px 16px 18px;border-right:1px solid var(--line);position:relative}
+  .pstep:last-child{border-right:none}
+  .pno{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .ptitle{font-size:14px;font-weight:600;margin:6px 0 6px}
+  .pdesc{font-size:12.5px;color:var(--dim);line-height:1.6}
+  .pstep:after{content:"";position:absolute;right:-5px;top:50%;width:8px;height:8px;border-top:1px solid var(--faint);border-right:1px solid var(--faint);transform:translateY(-50%) rotate(45deg);background:var(--panel2)}
+  .pstep:last-child:after{display:none}
+
+  /* 中断通路 */
+  .flow{display:grid;grid-template-columns:1fr;gap:0;margin-top:4px}
+  .fnode{border:1px solid var(--line);background:var(--panel);padding:14px 16px}
+  .fnode h4{margin:0 0 6px;font-size:13.5px;font-weight:600;font-family:var(--mono)}
+  .fnode p{margin:0;font-size:12.5px;color:var(--dim);line-height:1.6}
+  .arrowpad{display:flex;align-items:center;gap:10px;padding:8px 16px;color:var(--faint);font-family:var(--mono);font-size:11.5px}
+  .arrowpad i{font-style:normal;color:var(--kern)}
+  .isr h4{color:var(--app)} .thr h4{color:var(--kern)}
+
+  table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+  th{font-weight:600;color:var(--dim);font-size:12px;letter-spacing:.02em;background:var(--panel2)}
+  td{color:var(--dim);line-height:1.6}
+  td:first-child{color:var(--text);font-family:var(--mono);font-size:12.5px}
+  .t1 th:nth-child(1),.t1 td:nth-child(1){width:20%}
+  .t1 th:nth-child(2),.t1 td:nth-child(2){width:26%}
+  .t1 th:nth-child(3),.t1 td:nth-child(3){width:54%}
+
+  footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);color:var(--faint);font-size:12px;font-family:var(--mono);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+
+  @media (max-width:640px){
+    body{padding:32px 14px 56px}
+    .layer{grid-template-columns:1fr}
+    .ltag{border-right:none;border-bottom:1px solid var(--line);padding:10px 14px}
+    .mrow{grid-template-columns:1fr;gap:6px}
+    .msize{text-align:left}
+    .pstep{flex:1 1 100%;border-right:none;border-bottom:1px solid var(--line)}
+    .pstep:after{right:auto;left:50%;top:auto;bottom:-5px;transform:rotate(135deg)}
+    .snum{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">STM32F429ZIT6 / Zephyr LTS-free 主线 v4.5.0</div>
+  <h1>STM32 上的 <span>Zephyr</span> 分层架构</h1>
+  <p class="lede">这份架构图描述应用代码、Zephyr 内核与 STM32 硬件层之间的边界：谁定义硬件事实、谁负责实时性、中断与线程如何交接、一次构建如何从 devicetree 长出固件。</p>
+  <div class="facts">
+    <span class="fact">SYSCLK <b>168 MHz</b></span>
+    <span class="fact">Flash <b>2 MB</b></span>
+    <span class="fact">SRAM <b>192 KB</b></span>
+    <span class="fact">CCM <b>64 KB</b></span>
+    <span class="fact">SDRAM <b>8 MB</b></span>
+    <span class="fact">SDK <b>1.0.0</b></span>
+    <span class="fact">Console <b>USART1 115200</b></span>
+  </div>
+</header>
+
+<section>
+  <div class="shead"><span class="snum">01</span><h2>分层与依赖方向</h2></div>
+  <p class="note">向下单向依赖：上层只调标准 API，绝不越过设备抽象层直接操作 STM32 HAL。硬件事实只存在于 devicetree 与 Kconfig 两处。</p>
+
+  <div class="stack">
+    <div class="layer tagapp">
+      <div class="ltag"><span class="dot"></span>L4 应用层</div>
+      <div class="lbody">
+        <div class="ltitle">业务线程 / 状态机 / 命令处理</div>
+        <div class="lpath">app/src/*.c · app/include/app_*.h</div>
+        <div class="ldesc">心跳线程、采样处理线程、Shell 命令组。只依赖标准 API 与自身头文件，不知道引脚号。</div>
+      </div>
+    </div>
+    <div class="layer tagsvc">
+      <div class="ltag"><span class="dot"></span>L3 服务层</div>
+      <div class="lbody">
+        <div class="ltitle">日志 / Shell / 设置 / 文件系统 / 电源管理</div>
+        <div class="lpath">zephyr/subsys/{logging,shell,settings,fs,pm}</div>
+        <div class="ldesc">按需裁剪。日志采用延迟模式，中断里只入缓冲，由日志线程落串口。</div>
+      </div>
+    </div>
+    <div class="layer tagkern">
+      <div class="ltag"><span class="dot"></span>L2 内核层</div>
+      <div class="lbody">
+        <div class="ltitle">调度 · 线程 · 信号量 · 消息队列 · 定时器 · 内存池</div>
+        <div class="lpath">zephyr/kernel/</div>
+        <div class="ldesc">抢占式优先级调度；中断到线程通过 <code>k_msgq</code> / <code>k_sem</code> 交接；共享数据用 <code>k_spinlock</code> 保护。</div>
+      </div>
+    </div>
+    <div class="layer tagdrv">
+      <div class="ltag"><span class="dot"></span>L1 设备抽象</div>
+      <div class="lbody">
+        <div class="ltitle">设备模型 · 驱动 API · pinctrl · clock_control</div>
+        <div class="lpath">zephyr/include/zephyr/drivers · zephyr/drivers/</div>
+        <div class="ldesc">gpio / serial / i2c / spi / adc / pwm / watchdog … 统一 <code>device</code> 结构与 API，板级差异由 dts 传入。</div>
+      </div>
+    </div>
+    <div class="layer tagsoc">
+      <div class="ltag"><span class="dot"></span>L0 架构与 SoC</div>
+      <div class="lbody">
+        <div class="ltitle">Cortex-M 异常与上下文切换 · STM32F4 SoC 初始化 · HAL/LL · CMSIS</div>
+        <div class="lpath">arch/arm/core/cortex_m · soc/st/stm32/stm32f4x · modules/hal/stm32 · cmsis_6</div>
+        <div class="ldesc">复位入口、PendSV 切换、FPU 上下文、时钟树配置、外设寄存器定义。此层以下是芯片。</div>
+      </div>
+    </div>
+    <div class="layer taghw">
+      <div class="ltag"><span class="dot"></span>HW</div>
+      <div class="lbody">
+        <div class="ltitle">STM32F429ZIT6 + 板载外设</div>
+        <div class="lpath">Flash 2MB @0x0800_0000 · SRAM 192KB @0x2000_0000 · CCM 64KB @0x1000_0000</div>
+        <div class="ldesc">LD3 PG13 / LD4 PG14 / 按键 PA0 / I2C3 触摸 / SPI5+LTDC 显示 / FMC SDRAM。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">02</span><h2>存储器映射</h2></div>
+  <p class="note">数值取自 <code>zephyr/dts/arm/st/f4/stm32f429Xi.dtsi</code> 与板级 dts。条形长度为定性示意，标注容量为准。</p>
+
+  <div class="mem">
+    <div class="mrow f">
+      <div class="addr">0x0800_0000</div>
+      <div>
+        <div class="mname">Flash · flash0</div>
+        <div class="muse">代码段、只读数据、向量表；<code>zephyr,flash</code> 指向此处</div>
+        <div class="mbar"><i style="width:100%"></i></div>
+      </div>
+      <div class="msize">2 MB</div>
+    </div>
+
+    <div class="mrow s">
+      <div class="addr">0x2000_0000</div>
+      <div>
+        <div class="mname">SRAM · sram0</div>
+        <div class="muse">SRAM1 112KB + SRAM2 16KB + SRAM3 64KB 连续映射；.data / .bss / 线程栈 / 堆</div>
+        <div class="mbar"><i style="width:12%"></i></div>
+      </div>
+      <div class="msize">192 KB</div>
+    </div>
+
+    <div class="mrow c">
+      <div class="addr">0x1000_0000</div>
+      <div>
+        <div class="mname">CCM RAM · ccm0</div>
+        <div class="muse">CPU 零等待访问；<code>zephyr,dtcm</code> 指向此处，适合高频热数据</div>
+        <div class="mbar"><i style="width:4%"></i></div>
+      </div>
+      <div class="msize">64 KB</div>
+    </div>
+
+    <div class="mrow d">
+      <div class="addr">0xD000_0000</div>
+      <div>
+        <div class="mname">SDRAM · sdram2（FMC）</div>
+        <div class="muse">外部显存，LTDC 帧缓冲；以 <code>zephyr,memory-region</code> 暴露给驱动</div>
+        <div class="mbar"><i style="width:50%"></i></div>
+      </div>
+      <div class="msize">8 MB</div>
+    </div>
+  </div>
+
+  <div class="callout"><b>CCM 的硬约束</b>：CCM 挂在 CPU 私有总线上，DMA 控制器访问不到。任何 SPI/I2C/ADC 的 DMA 缓冲若放进 CCM，会表现为“传输完成但数据全 0”的静默故障。</div>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">03</span><h2>启动与初始化级别</h2></div>
+  <p class="note">五个初始化级别决定了“这段代码运行时，哪些内核能力已经可用”。错用级别最常见的结果是驱动在时钟未就绪时 probe。</p>
+
+  <div class="boot">
+    <div class="step">
+      <div class="stitle">Reset_Handler<em>arch/arm/core/cortex_m</em></div>
+      <div class="sdesc">关中断、建立最小运行环境，调用 <code>SystemInit()</code> 完成 FPU 使能与向量表基址设置。</div>
+    </div>
+    <div class="step">
+      <div class="stitle">z_cstart()<em>C 运行时入口</em></div>
+      <div class="sdesc">拷贝 .data、清零 .bss、初始化 CCM 段、建立中断栈与主线程栈，随后切换到主线程上下文。</div>
+    </div>
+    <div class="step alt">
+      <div class="stitle">EARLY<em>极早期</em></div>
+      <div class="sdesc">仅能访问寄存器，用于看门狗、极早期时钟；本工程不使用。</div>
+    </div>
+    <div class="step alt">
+      <div class="stitle">PRE_KERNEL_1 / PRE_KERNEL_2<em>内核尚未调度</em></div>
+      <div class="sdesc">中断可用但内核对象不可用；时钟控制、串口底层、GPIO/pinmux 在此完成。</div>
+    </div>
+    <div class="step alt">
+      <div class="stitle">POST_KERNEL<em>内核已运行</em></div>
+      <div class="sdesc">大多数驱动的 <code>device_init</code> 在此执行：设备结构注册完成，可安全使用信号量与队列。</div>
+    </div>
+    <div class="step alt">
+      <div class="stitle">APPLICATION → main()<em>应用入口</em></div>
+      <div class="sdesc">业务初始化显式写在 <code>main()</code>：先自检驱动句柄，再拉起线程，最后进入低频巡检循环。</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">04</span><h2>中断到线程的数据通路</h2></div>
+  <p class="note">实时性来自边界划分，而不是更快的 CPU：中断只做搬运，计算全部下沉。</p>
+  <p class="note">注：本节的 <code>app_sensor</code> 采样链路当前已从应用移除（源码备份于 <code>build/_sensor_backup_20261115</code>），本节保留作为中断→线程通路的参考设计。</p>
+
+  <div class="flow">
+    <div class="fnode isr">
+      <h4>k_timer 到期（ISR 上下文）</h4>
+      <p>读取一次采样值，<code>k_msgq_put(&amp;q, &amp;v, K_NO_WAIT)</code>。队列满就丢弃最新样本，绝不等待。</p>
+    </div>
+    <div class="arrowpad"><i>▼</i> 环形缓冲，深度 64，样本 10ms 一个</div>
+    <div class="fnode thr">
+      <h4>sensor_proc 线程（优先级 8）</h4>
+      <p><code>k_msgq_get(K_FOREVER)</code> 阻塞取样本，做一阶 IIR 滤波与 min/max/avg 统计，临界区用 <code>k_spinlock</code>。</p>
+    </div>
+    <div class="arrowpad"><i>▼</i> 快照读取，无锁竞争</div>
+    <div class="fnode">
+      <h4>main 线程 / Shell</h4>
+      <p>每 5 秒打印一次统计；<code>app stats</code> 命令随时查询。日志走延迟模式，不阻塞上述任何一方。</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">05</span><h2>构建流水线</h2></div>
+  <p class="note">一条命令背后是五段职责：工作区解析、Kconfig 求解、devicetree 生成、编译、链接与烧录。</p>
+
+  <div class="pipe">
+    <div class="pstep">
+      <div class="pno">01</div>
+      <div class="ptitle">west 工作区</div>
+      <div class="pdesc">读 <code>.west/config</code> 定位 manifest，解析 west.yml 与模块路径。</div>
+    </div>
+    <div class="pstep">
+      <div class="pno">02</div>
+      <div class="ptitle">CMake 配置</div>
+      <div class="pdesc">确定 board → SoC → arch，探测工具链与 SDK 版本。</div>
+    </div>
+    <div class="pstep">
+      <div class="pno">03</div>
+      <div class="ptitle">Kconfig + DTS</div>
+      <div class="pdesc">求解 <code>.config</code>；把 dts/overlay 展开成 <code>devicetree_generated.h</code>。</div>
+    </div>
+    <div class="pstep">
+      <div class="pno">04</div>
+      <div class="ptitle">编译 · 链接</div>
+      <div class="pdesc">Ninja 编译；链接脚本按 dts 内存节点自动生成。</div>
+    </div>
+    <div class="pstep">
+      <div class="pno">05</div>
+      <div class="ptitle">烧录 · 观测</div>
+      <div class="pdesc"><code>west flash</code>（pyocd / ST-Link）；<code>-t ram_report</code> 查占用。</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">06</span><h2>配置职责边界</h2></div>
+  <p class="note">谁能改什么，写清楚才不会出现“应用代码里硬编码引脚”的返工。</p>
+
+  <table class="t1">
+    <thead>
+      <tr><th>层级</th><th>文件</th><th>职责与禁止项</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>应用能力</td><td>app/prj.conf</td><td>功能开关：LOG、SHELL、协议栈。禁止出现引脚、外设地址、板名。</td></tr>
+      <tr><td>板级差异</td><td>app/boards/*.conf</td><td>板特有开关（如显示、外部存储）。禁止写业务逻辑开关。</td></tr>
+      <tr><td>硬件描述</td><td>app/boards/*.overlay</td><td>引脚复用、外设状态、时钟参数。禁止定义应用数据结构。</td></tr>
+      <tr><td>上游默认</td><td>zephyr/soc/**/Kconfig.defconfig</td><td>只读参考，不在上游目录内改；需要覆盖就在 overlay / conf 里改。</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<footer>
+  <span>zephyr v4.5.0 · sdk 1.0.0 · board stm32f429i_disc1</span>
+  <span>docs/Zephyr-STM32F429-架构设计.md</span>
+</footer>
+
+</div>
+</body>
+</html>

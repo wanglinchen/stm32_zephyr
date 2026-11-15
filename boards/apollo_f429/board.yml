@@ -1,0 +1,6 @@
+board:
+  name: apollo_f429
+  full_name: ALIENTEK Apollo V2 (STM32F429IGT6)
+  vendor: alientek
+  socs:
+    - name: stm32f429xx

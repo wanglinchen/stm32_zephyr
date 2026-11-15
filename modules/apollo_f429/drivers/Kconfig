@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: Apache-2.0
+# 本模块的驱动由 drivers/CMakeLists.txt 无条件编译，不提供 Kconfig 开关：
+# 板级 devicetree 中 status = "okay" 即实例化对应驱动。

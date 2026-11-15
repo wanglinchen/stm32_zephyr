@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+description: |
+  Lite-On AP3216C ambient light / proximity sensor on I2C.
+
+compatible: "alientek,ap3216c"
+
+include: [sensor-device.yaml, i2c-device.yaml]

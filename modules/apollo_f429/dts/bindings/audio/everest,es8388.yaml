@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+description: |
+  Everest ES8388 stereo audio codec, I2C control port only.
+  The audio data path (SAI1 / I2S) is described by the SoC SAI node.
+
+compatible: "everest,es8388"
+
+include: [i2c-device.yaml]
+
+properties:
+  reset-gpios:
+    type: phandle-array
+    description: Optional codec reset pin.
